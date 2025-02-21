@@ -1,0 +1,44 @@
+---
+- name: Patch and update kernel and OS
+  hosts: all
+  become: true
+  tasks:
+
+    - name: Ensure the system is up to date
+      apt:
+        update_cache: yes
+        upgrade: dist
+      when: ansible_facts.packages is defined
+
+    - name: Check if a newer kernel is available
+      command: uname -r
+      register: current_kernel
+
+    - name: Get the available latest kernel version
+      command: apt-cache show linux-image-$(uname -r) | grep Version
+      register: available_kernel
+      changed_when: false
+
+    - name: Install the latest kernel
+      apt:
+        name: "linux-image-{{ available_kernel.stdout }}"
+        state: latest
+      when: current_kernel.stdout != available_kernel.stdout
+
+    - name: Reboot the system if a new kernel is installed
+      reboot:
+        reboot_timeout: 600
+      when: current_kernel.stdout != available_kernel.stdout
+
+    - name: Upgrade all installed packages
+      apt:
+        name: "*"
+        state: latest
+        upgrade: yes
+
+    - name: Reboot if necessary
+      reboot:
+        reboot_timeout: 600
+        test_command: whoami
+        when: ansible_facts.packages is defined
+
